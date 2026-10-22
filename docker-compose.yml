@@ -1,4 +1,4 @@
-﻿# =====================================================================
+# =====================================================================
 # Đề 9 - Website Thương mại điện tử (E-commerce) với Docker Compose
 # Hệ thống đầy đủ: Web + DB + phpMyAdmin + Nginx + Prometheus + Grafana
 # + cAdvisor + Node Exporter + MySQLd Exporter + Nginx Exporter + Loki + Promtail
@@ -291,6 +291,52 @@ services:
           cpus: '0.20'
           memory: 64M
 
+  # =======================================================
+  # Centralized Logging Stack (Loki + Promtail)
+  # =======================================================
+
+  # 11. Grafana Loki (Log Aggregation & Storage Engine - Non-root)
+  loki:
+    image: grafana/loki:2.9.8
+    container_name: ecommerce-loki
+    restart: unless-stopped
+    user: "10001:10001"
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./logging/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    networks:
+      frontend-net:
+        aliases:
+          - loki
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+
+  # 12. Promtail (Log Collector & Forwarder)
+  promtail:
+    image: grafana/promtail:2.9.8
+    container_name: ecommerce-promtail
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./logging/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - nginx_logs:/var/log/nginx:ro
+      - ./web/logs:/var/log/app:ro
+    networks:
+      - frontend-net
+    depends_on:
+      - loki
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
 
 networks:
   frontend-net:
@@ -307,4 +353,6 @@ volumes:
   prometheus_data:
     driver: local
   grafana_data:
+    driver: local
+  loki_data:
     driver: local
